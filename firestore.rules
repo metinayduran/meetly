@@ -1,0 +1,62 @@
+// ============================================================
+//  firestore.rules
+//  Deploy with:  firebase deploy --only firestore:rules
+// ============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── helpers ────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ── users collection ───────────────────────────────────
+    // Anyone can read public profiles.
+    // Only the owner can write their own document.
+    match /users/{userId} {
+      allow read:  if true;
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId);
+      allow delete: if isOwner(userId);
+    }
+
+    // ── events collection ──────────────────────────────────
+    // Anyone can read events.
+    // Only signed-in users can create events.
+    // Only the event host can update/delete their own event.
+    match /events/{eventId} {
+      allow read: if true;
+      allow create: if isSignedIn()
+                    && request.resource.data.hostUid == request.auth.uid
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() > 0
+                    && request.resource.data.title.size() <= 120
+                    && request.resource.data.maxAttendees is int
+                    && request.resource.data.maxAttendees > 0
+                    && request.resource.data.maxAttendees <= 1000;
+      allow update: if isOwner(resource.data.hostUid);
+      allow delete: if isOwner(resource.data.hostUid);
+    }
+
+    // ── rsvps sub-collection ───────────────────────────────
+    // Stored at: /events/{eventId}/rsvps/{userId}
+    // Anyone can read rsvp counts.
+    // Users can only write their own rsvp document.
+    match /events/{eventId}/rsvps/{userId} {
+      allow read:   if true;
+      allow write:  if isOwner(userId);
+    }
+
+    // ── rsvps mirror (for querying "my events") ────────────
+    // Stored at: /rsvps/{userId}/events/{eventId}
+    match /rsvps/{userId}/events/{eventId} {
+      allow read:   if isOwner(userId);
+      allow write:  if isOwner(userId);
+    }
+  }
+}
