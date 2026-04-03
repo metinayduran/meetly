@@ -18,6 +18,8 @@ import {
   onAuthChange,
   getUserProfile,
   createEvent,
+  updateEvent,
+  deleteEvent,
   subscribeToEvents,
   toggleRsvp,
   getUserRsvps,
@@ -141,6 +143,10 @@ export default function App() {
   const [showLogin,       setShowLogin]       = useState(false);
   const [showRegister,    setShowRegister]    = useState(false);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [showEditEvent,   setShowEditEvent]   = useState(false);
+  const [editingEvent,    setEditingEvent]    = useState(null);
+  const [editForm,        setEditForm]        = useState({ title:"", category:"Tech", date:"", time:"18:00", location:"", description:"", maxAttendees:30, tags:"", photoFile:null, photoPreview:null });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // forms
   const [loginForm,  setLoginForm]  = useState({ email:"", password:"", error:"" });
@@ -256,6 +262,67 @@ export default function App() {
       setShowCreateEvent(false);
       setCreateForm({ title:"",category:"Tech",date:"",time:"18:00",location:"",description:"",maxAttendees:30,tags:"",photoFile:null,photoPreview:null });
       showToast("Event published! 🎉");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally { setLoading(false); }
+  }
+
+  function openEditModal(event) {
+    const d = event.date;
+    const dateStr = d.toISOString().split('T')[0];
+    const timeStr = d.toTimeString().slice(0,5);
+    setEditForm({
+      title:       event.title,
+      category:    event.category,
+      date:        dateStr,
+      time:        timeStr,
+      location:    event.location,
+      description: event.description || "",
+      maxAttendees:event.maxAttendees,
+      tags:        (event.tags||[]).join(", "),
+      photoFile:   null,
+      photoPreview:event.photoURL || null,
+    });
+    setEditingEvent(event);
+    setSelectedEvent(null);
+    setShowEditEvent(true);
+  }
+
+  async function handleEditEvent(e) {
+    e.preventDefault();
+    if (!editForm.title || !editForm.date || !editForm.location) {
+      showToast("Please fill in title, date and location", "error"); return;
+    }
+    setLoading(true);
+    try {
+      await updateEvent(editingEvent.id, {
+        title:       editForm.title,
+        category:    editForm.category,
+        date:        new Date(editForm.date),
+        time:        editForm.time,
+        location:    editForm.location,
+        description: editForm.description,
+        maxAttendees:parseInt(editForm.maxAttendees) || 30,
+        tags:        editForm.tags.split(",").map(t=>t.trim()).filter(Boolean),
+        photoFile:   editForm.photoFile,
+        existingPhotoURL: editingEvent.photoURL || null,
+      });
+      setShowEditEvent(false);
+      setEditingEvent(null);
+      showToast("Event updated!");
+    } catch (err) {
+      showToast(err.message, "error");
+    } finally { setLoading(false); }
+  }
+
+  async function handleDeleteEvent() {
+    setLoading(true);
+    try {
+      await deleteEvent(editingEvent.id);
+      setShowDeleteConfirm(false);
+      setShowEditEvent(false);
+      setEditingEvent(null);
+      showToast("Event deleted");
     } catch (err) {
       showToast(err.message, "error");
     } finally { setLoading(false); }
@@ -447,9 +514,16 @@ export default function App() {
                   <div style={{ fontSize:11,color:"var(--color-text-secondary)" }}>of {selectedEvent.maxAttendees}</div>
                 </div>
               </div>
-              <button onClick={()=>handleToggleRsvp(selectedEvent.id)} style={{ ...btnPrimary,background:rsvpd.includes(selectedEvent.id)?"#22c55e":"#4f46e5" }}>
-                {rsvpd.includes(selectedEvent.id)?"✓ You're going! (click to cancel)":"RSVP — Join this event"}
-              </button>
+              {user && user.uid === selectedEvent.hostUid ? (
+                <div style={{ display:"flex",gap:10 }}>
+                  <button onClick={()=>openEditModal(selectedEvent)} style={{ ...btnPrimary,background:"#4f46e5" }}>✏️ Edit event</button>
+                  <button onClick={()=>{setEditingEvent(selectedEvent);setShowDeleteConfirm(true);}} style={{ ...btnPrimary,background:"#ef4444",width:"auto",padding:"11px 20px" }}>🗑</button>
+                </div>
+              ) : (
+                <button onClick={()=>handleToggleRsvp(selectedEvent.id)} style={{ ...btnPrimary,background:rsvpd.includes(selectedEvent.id)?"#22c55e":"#4f46e5" }}>
+                  {rsvpd.includes(selectedEvent.id)?"✓ You're going! (click to cancel)":"RSVP — Join this event"}
+                </button>
+              )}
             </div>
           </div>
         </Modal>
@@ -532,6 +606,60 @@ export default function App() {
               <div><label style={labelStyle}>Description</label><textarea value={createForm.description} onChange={e=>setCreateForm(p=>({...p,description:e.target.value}))} placeholder="What can attendees expect?" style={{ ...inputStyle,height:80,resize:"vertical" }}/></div>
               <div><label style={labelStyle}>Tags (comma-separated)</label><input value={createForm.tags} onChange={e=>setCreateForm(p=>({...p,tags:e.target.value}))} placeholder="React, Networking, Beginner-friendly" style={inputStyle}/></div>
               <button onClick={handleCreateEvent} style={btnPrimary} disabled={loading}>{loading?<Spinner/>:(user?"Publish event":"Sign in to publish")}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Edit Event Modal ── */}
+      {showEditEvent&&(
+        <Modal onClose={()=>setShowEditEvent(false)}>
+          <div style={{ padding:"32px 28px" }}>
+            <h2 style={{ fontSize:22,fontWeight:700,margin:"0 0 6px",color:"#111827" }}>Edit event</h2>
+            <p style={{ fontSize:14,color:"#6b7280",marginBottom:24 }}>Update your event details</p>
+            <div style={{ display:"flex",flexDirection:"column",gap:14 }}>
+              <div>
+                <label style={labelStyle}>Cover photo</label>
+                <div onClick={()=>eventPhotoRef.current.click()} style={{ height:100,borderRadius:12,border:"2px dashed #d1d5db",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",overflow:"hidden",background:"#f9fafb" }}>
+                  {editForm.photoPreview?<img src={editForm.photoPreview} style={{ width:"100%",height:"100%",objectFit:"cover" }}/>:<div style={{ textAlign:"center" }}><div style={{ fontSize:24 }}>🖼</div><div style={{ fontSize:12,color:"#6b7280",marginTop:4 }}>Click to change photo</div></div>}
+                </div>
+                <input ref={eventPhotoRef} type="file" accept="image/*" style={{ display:"none" }} onChange={e=>handlePhotoUpload(e,setEditForm)}/>
+              </div>
+              <div><label style={labelStyle}>Title *</label><input value={editForm.title} onChange={e=>setEditForm(p=>({...p,title:e.target.value}))} style={inputStyle}/></div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div><label style={labelStyle}>Category</label>
+                  <select value={editForm.category} onChange={e=>setEditForm(p=>({...p,category:e.target.value}))} style={{...inputStyle}}>
+                    {CATEGORIES.filter(c=>c!=="All").map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div><label style={labelStyle}>Max attendees</label><input type="number" value={editForm.maxAttendees} onChange={e=>setEditForm(p=>({...p,maxAttendees:e.target.value}))} min={1} style={inputStyle}/></div>
+              </div>
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
+                <div><label style={labelStyle}>Date *</label><input type="date" value={editForm.date} onChange={e=>setEditForm(p=>({...p,date:e.target.value}))} style={inputStyle}/></div>
+                <div><label style={labelStyle}>Time</label><input type="time" value={editForm.time} onChange={e=>setEditForm(p=>({...p,time:e.target.value}))} style={inputStyle}/></div>
+              </div>
+              <div><label style={labelStyle}>Location *</label><input value={editForm.location} onChange={e=>setEditForm(p=>({...p,location:e.target.value}))} style={inputStyle}/></div>
+              <div><label style={labelStyle}>Description</label><textarea value={editForm.description} onChange={e=>setEditForm(p=>({...p,description:e.target.value}))} style={{...inputStyle,height:80,resize:"vertical"}}/></div>
+              <div><label style={labelStyle}>Tags (comma-separated)</label><input value={editForm.tags} onChange={e=>setEditForm(p=>({...p,tags:e.target.value}))} style={inputStyle}/></div>
+              <div style={{ display:"flex",gap:10 }}>
+                <button onClick={handleEditEvent} style={{...btnPrimary,background:"#4f46e5"}} disabled={loading}>{loading?<Spinner/>:"Save changes"}</button>
+                <button onClick={()=>{setShowDeleteConfirm(true);}} style={{...btnPrimary,background:"#ef4444",width:"auto",padding:"11px 20px",flexShrink:0}} disabled={loading}>🗑</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Delete Confirm Modal ── */}
+      {showDeleteConfirm&&(
+        <Modal onClose={()=>setShowDeleteConfirm(false)}>
+          <div style={{ padding:"32px 28px",textAlign:"center" }}>
+            <div style={{ fontSize:48,marginBottom:16 }}>🗑️</div>
+            <h2 style={{ fontSize:20,fontWeight:700,margin:"0 0 8px",color:"#111827" }}>Delete this event?</h2>
+            <p style={{ fontSize:14,color:"#6b7280",marginBottom:24 }}>This can't be undone. All RSVPs will be lost.</p>
+            <div style={{ display:"flex",gap:10 }}>
+              <button onClick={()=>setShowDeleteConfirm(false)} style={{...btnPrimary,background:"#f3f4f6",color:"#374151"}}>Cancel</button>
+              <button onClick={handleDeleteEvent} style={{...btnPrimary,background:"#ef4444"}} disabled={loading}>{loading?<Spinner/>:"Yes, delete"}</button>
             </div>
           </div>
         </Modal>

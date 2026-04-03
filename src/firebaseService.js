@@ -169,19 +169,28 @@ export async function getEvents({ category = null, limitCount = 50 } = {}) {
 
 /** Real-time listener for events. Returns unsubscribe fn. */
 export function subscribeToEvents(callback, { category = null } = {}) {
-  const now = Timestamp.now();
-  const constraints = [where("date", ">=", now), orderBy("date", "asc"), limit(50)];
-  if (category && category !== "All") {
-    constraints.unshift(where("category", "==", category));
-  }
-  const q = query(collection(db, "events"), ...constraints);
+  // Simple single-field orderBy — no composite index needed.
+  // Date and category filtering done client-side.
+  const q = query(
+    collection(db, "events"),
+    orderBy("date", "asc"),
+    limit(100)
+  );
   return onSnapshot(q, snap => {
-    const events = snap.docs.map(d => ({
+    const now = new Date();
+    let events = snap.docs.map(d => ({
       id: d.id,
       ...d.data(),
       date: d.data().date.toDate(),
     }));
+    events = events.filter(e => e.date >= now);
+    if (category && category !== "All") {
+      events = events.filter(e => e.category === category);
+    }
     callback(events);
+  }, err => {
+    console.error("Firestore listener error:", err);
+    callback([]);
   });
 }
 
@@ -190,6 +199,29 @@ export async function getEvent(eventId) {
   const snap = await getDoc(doc(db, "events", eventId));
   if (!snap.exists()) return null;
   return { id: snap.id, ...snap.data(), date: snap.data().date.toDate() };
+}
+
+/** Update an event (only the host should call this) */
+export async function updateEvent(eventId, eventData) {
+  const { photoFile, date, time, existingPhotoURL, ...rest } = eventData;
+
+  const [h, m] = time.split(":").map(Number);
+  const dt = new Date(date);
+  dt.setHours(h, m, 0, 0);
+
+  let photoURL = existingPhotoURL || null;
+
+  if (photoFile) {
+    const storageRef = ref(storage, `events/${eventId}/${photoFile.name}`);
+    await uploadBytes(storageRef, photoFile);
+    photoURL = await getDownloadURL(storageRef);
+  }
+
+  await updateDoc(doc(db, "events", eventId), {
+    ...rest,
+    date: Timestamp.fromDate(dt),
+    photoURL,
+  });
 }
 
 /** Delete an event (only the host should call this) */
