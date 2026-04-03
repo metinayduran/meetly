@@ -73,8 +73,8 @@ function Modal({ children, onClose }) {
   }, [onClose]);
   return (
     <div style={{ position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",padding:20 }} onClick={onClose}>
-      <div style={{ background:"var(--color-background-primary)",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"88vh",overflowY:"auto",position:"relative" }} onClick={e=>e.stopPropagation()}>
-        <button onClick={onClose} style={{ position:"absolute",top:14,right:14,width:30,height:30,borderRadius:"50%",border:"1px solid var(--color-border-tertiary)",background:"var(--color-background-secondary)",cursor:"pointer",fontSize:16,zIndex:10,display:"flex",alignItems:"center",justifyContent:"center" }}>×</button>
+      <div style={{ background:"#ffffff",borderRadius:20,width:"100%",maxWidth:560,maxHeight:"88vh",overflowY:"auto",position:"relative" }} onClick={e=>e.stopPropagation()}>
+        <button onClick={onClose} style={{ position:"absolute",top:14,right:14,width:30,height:30,borderRadius:"50%",border:"1px solid #e5e7eb",background:"#f9fafb",cursor:"pointer",fontSize:16,zIndex:10,display:"flex",alignItems:"center",justifyContent:"center",color:"#374151" }}>×</button>
         {children}
       </div>
     </div>
@@ -294,8 +294,8 @@ export default function App() {
 
   // ── styles ────────────────────────────────────────────────
 
-  const inputStyle = { width:"100%",padding:"10px 14px",borderRadius:10,border:"1px solid var(--color-border-tertiary)",background:"var(--color-background-secondary)",color:"var(--color-text-primary)",fontSize:14,boxSizing:"border-box",outline:"none" };
-  const labelStyle = { fontSize:11,fontWeight:700,color:"var(--color-text-secondary)",marginBottom:4,display:"block",letterSpacing:"0.06em",textTransform:"uppercase" };
+  const inputStyle = { width:"100%",padding:"10px 14px",borderRadius:10,border:"1px solid #d1d5db",background:"#ffffff",color:"#111827",fontSize:14,boxSizing:"border-box",outline:"none" };
+  const labelStyle = { fontSize:11,fontWeight:700,color:"#6b7280",marginBottom:4,display:"block",letterSpacing:"0.06em",textTransform:"uppercase" };
   const btnPrimary = { background:"#4f46e5",color:"white",border:"none",borderRadius:10,padding:"11px 22px",fontWeight:600,fontSize:14,cursor:"pointer",width:"100%",display:"flex",alignItems:"center",justifyContent:"center",gap:8 };
   const errStyle   = { fontSize:12,color:"#ef4444",marginTop:-8 };
 
